@@ -11,7 +11,6 @@ mkdir -p "$BASE/logs" "$BASE/data"
 TS="$(date '+%Y-%m-%d %H:%M:%S %Z')"
 NOW_EPOCH=$(date +%s)
 
-# carrega variáveis do .env.vps (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)
 if [ -f "$ENV_FILE" ]; then
   set -a
   # shellcheck disable=SC1090
@@ -28,19 +27,49 @@ fmt_cuiaba_now() {
   TZ=America/Cuiaba date "+%d/%m/%Y %H:%M:%S (%Z)"
 }
 
+humanize_seconds() {
+  local s="$1"
+  local h=$((s/3600))
+  local m=$(((s%3600)/60))
+  if [ "$h" -gt 0 ] && [ "$m" -gt 0 ]; then
+    echo "${h}h ${m}min"
+  elif [ "$h" -gt 0 ]; then
+    echo "${h}h"
+  elif [ "$m" -gt 0 ]; then
+    echo "${m}min"
+  else
+    echo "< 1min"
+  fi
+}
+
 send_tg() {
   local text="$1"
   if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
     curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-      -d "chat_id=${TELEGRAM_CHAT_ID}" \
-      -d "text=${text}" \
-      -d "disable_notification=true" > /dev/null || true
+      --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+      --data-urlencode "text=${text}" \
+      --data-urlencode "parse_mode=HTML" \
+      --data-urlencode "disable_notification=true" \
+      --data-urlencode "disable_web_page_preview=true" > /dev/null || true
   fi
+}
+
+notify_template() {
+  local icon="$1"
+  local title="$2"
+  local status="$3"
+  local details="$4"
+
+  send_tg "${icon} <b>${title}</b>
+━━━━━━━━━━━━━━━━━━
+🕒 <b>Hora (Cuiabá):</b> $(fmt_cuiaba_now)
+📌 <b>Status:</b> ${status}
+${details}"
 }
 
 if [ ! -f "$BASE/data/instagram-cookies.txt" ]; then
   echo "[$TS] skip: cookie ausente ($BASE/data/instagram-cookies.txt)" >> "$LOG"
-  send_tg "⚠️ *Curadoria VPS*\n🕒 Hora (Cuiabá): $(fmt_cuiaba_now)\n⏭️ Sincronização não executada\nMotivo: cookie ausente em /app/data/instagram-cookies.txt"
+  notify_template "⚠️" "Curadoria VPS" "sincronização não executada" "📌 <b>Motivo:</b> cookie ausente em /app/data/instagram-cookies.txt"
   exit 0
 fi
 
@@ -52,10 +81,14 @@ if [ -f "$COOLDOWN_FILE" ]; then
     else
       BAN_SINCE=$((UNTIL-21600))
     fi
+
     REM=$((UNTIL-NOW_EPOCH))
+    REM_HUMAN=$(humanize_seconds "$REM")
     echo "[$TS] skip: cooldown ativo por 429 (${REM}s restantes)" >> "$LOG"
 
-    send_tg "🚫 *Curadoria VPS — em BAN 429*\n🕒 Hora (Cuiabá): $(fmt_cuiaba_now)\n📌 Status: sincronização executada, mas *SKIP* por rate limit\n📅 Em ban desde: $(fmt_cuiaba_epoch "$BAN_SINCE")\n✅ Saída prevista do ban: $(fmt_cuiaba_epoch "$UNTIL")\n⏳ Restante: ${REM}s"
+    notify_template "🚫" "Curadoria VPS — BAN 429 ativo" "sincronização em SKIP por rate limit" "📅 <b>Em ban desde:</b> $(fmt_cuiaba_epoch "$BAN_SINCE")
+✅ <b>Saída prevista:</b> $(fmt_cuiaba_epoch "$UNTIL")
+⏳ <b>Tempo restante:</b> ${REM_HUMAN}"
     exit 0
   else
     rm -f "$COOLDOWN_FILE" "$BAN_SINCE_FILE"
@@ -81,12 +114,13 @@ if grep -q "429\|Too Many Requests" "$TMP"; then
   echo "$NOW_EPOCH" > "$BAN_SINCE_FILE"
   echo "[$TS] 429 detectado -> cooldown de 6h ativado" >> "$LOG"
 
-  send_tg "🚫 *Curadoria VPS — BAN 429 detectado*\n🕒 Hora (Cuiabá): $(fmt_cuiaba_now)\n📌 A sincronização rodou, mas bateu limite da Instagram\n📅 Ban começou: $(fmt_cuiaba_epoch "$NOW_EPOCH")\n✅ Saída prevista: $(fmt_cuiaba_epoch "$UNTIL")\n🔁 Próximas rodadas por hora ficarão em SKIP até liberar"
+  notify_template "🚫" "Curadoria VPS — BAN 429 detectado" "sincronização rodou, mas bateu limite da Instagram" "📅 <b>Ban começou:</b> $(fmt_cuiaba_epoch "$NOW_EPOCH")
+✅ <b>Saída prevista:</b> $(fmt_cuiaba_epoch "$UNTIL")
+🔁 <b>Próximas rodadas:</b> SKIP horário até liberar"
   rm -f "$TMP"
   exit $RC
 fi
 
-# resumo normal (sem 429)
 SENT_NOW=$(python3 - <<'PY'
 import json
 from pathlib import Path
@@ -100,9 +134,9 @@ PY
 )
 
 if [ "$RC" -eq 0 ]; then
-  send_tg "✅ *Curadoria VPS — sincronização concluída*\n🕒 Hora (Cuiabá): $(fmt_cuiaba_now)\n📦 Novos memes enviados nesta rodada: ${SENT_NOW}\n📌 Status: sem ban 429"
+  notify_template "✅" "Curadoria VPS — sincronização concluída" "sem ban 429" "📦 <b>Memes enviados nesta rodada:</b> ${SENT_NOW}"
 else
-  send_tg "⚠️ *Curadoria VPS — erro na sincronização*\n🕒 Hora (Cuiabá): $(fmt_cuiaba_now)\n📌 Status: execução com erro (sem 429)\n🧾 Verificar log: /opt/instagram-stories-curadoria/logs/vps-hourly.log"
+  notify_template "⚠️" "Curadoria VPS — erro na sincronização" "execução com erro (sem 429)" "🧾 <b>Log:</b> /opt/instagram-stories-curadoria/logs/vps-hourly.log"
 fi
 
 rm -f "$TMP"
