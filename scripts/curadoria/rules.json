@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "normalize": {
+    "lower": true,
+    "strip_accents": true
+  },
+  "labels": ["meme", "noticia-propaganda", "revisar"],
+  "thresholds": {
+    "noticia-propaganda": 2,
+    "meme": 1
+  },
+  "default_label": "revisar",
+  "rules": [
+    {
+      "id": "force-news-portal",
+      "enabled": true,
+      "priority": 100,
+      "order": 10,
+      "when_any": ["perrenguematogrosso.com", "veja video", "veja o video"],
+      "set_label": "noticia-propaganda",
+      "stop_on_match": true,
+      "notes": "Override de alta confiança para prints de notícia do portal"
+    },
+    {
+      "id": "news-keywords-strong",
+      "enabled": true,
+      "priority": 80,
+      "order": 20,
+      "when_any": ["publicidade", "patrocinado", "anuncie", "oferta", "desconto", "cupom", "com.br", "www.", "http"],
+      "add_scores": {"noticia-propaganda": 2}
+    },
+    {
+      "id": "news-keywords-local",
+      "enabled": true,
+      "priority": 70,
+      "order": 30,
+      "when_any": ["mato grosso", "cuiaba", "prefeitura", "governo", "policia", "deputado", "senador", "ministro", "vereador"],
+      "add_scores": {"noticia-propaganda": 1}
+    },
+    {
+      "id": "ad-keywords-brand",
+      "enabled": true,
+      "priority": 65,
+      "order": 35,
+      "when_any": ["experimente", "qualidade", "@mika_alimentos", "mika alimentos", "cereal matinal", "corn flakes", "choco balls"],
+      "add_scores": {"noticia-propaganda": 2}
+    },
+    {
+      "id": "meme-phrases-strong",
+      "enabled": true,
+      "priority": 60,
+      "order": 40,
+      "when_any": ["nao sei", "não sei", "nao conheco", "não conheço", "nao faco ideia", "não faço ideia", "ficou sabendo", "quem e?", "quem e??", "o que e isso"],
+      "add_scores": {"meme": 2}
+    },
+    {
+      "id": "meme-social-format",
+      "enabled": true,
+      "priority": 50,
+      "order": 50,
+      "when_any": ["x.com", "bsky.social"],
+      "add_scores": {"meme": 1}
+    },
+    {
+      "id": "meme-keywords-light",
+      "enabled": true,
+      "priority": 40,
+      "order": 60,
+      "when_any": ["kkkk", "kkk", "meme", "piada", "pov", "risos", "hahaha", "socorro", "me seguindo pela loja", "fiquei sabendo", "sopa", "janta", "tobias.oficial"],
+      "add_scores": {"meme": 1}
+    },
+    {
+      "id": "price-pattern",
+      "enabled": true,
+      "priority": 35,
+      "order": 70,
+      "when_regex": ["\\b(r\\$|rs\\s?)\\d"],
+      "add_scores": {"noticia-propaganda": 1}
+    },
+    {
+      "id": "phone-pattern",
+      "enabled": true,
+      "priority": 35,
+      "order": 80,
+      "when_regex": ["\\b\\d{4,5}[-\\s]?\\d{4}\\b"],
+      "add_scores": {"noticia-propaganda": 1}
+    }
+  ]
+}

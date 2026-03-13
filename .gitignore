@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# runtime data
+logs/
+data/
+
+# secrets
+.env
+.env.*
+!.env.example
+!.env.reels.example
+!.env.posts.example
+!.env.telegram.example
+!.env.vps.example
